@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q-Learning · Clássico × Quântico — Pedro Paulo Ribeiro</title>
+  <meta name="description" content="Projeto prático de Aprendizado por Reforço (Q-Learning) em Python com Flask: computação clássica e computação quântica.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛️</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header class="topo">
+  <div class="topo-texto">
+    <p class="sobretitulo">Projeto prático · Aprendizado por Reforço em Python</p>
+    <h1>Q-Learning: Computação Clássica × Computação Quântica</h1>
+    <p class="subtitulo">Um agente aprende, por tentativa e erro, a atravessar um labirinto evitando armadilhas.
+      Compare o Q-Learning tabular com um agente quântico que escolhe ações por medição e aprende por amplificação de amplitude (Grover).</p>
+
+    <div class="contatos">
+      <strong>📞 Meus Contatos:</strong>
+      <a href="{{ contatos.site }}" target="_blank" rel="noopener">{{ contatos.site_rotulo }}</a>
+      <span>📱 WhatsApp: <a href="{{ contatos.whatsapp }}" target="_blank" rel="noopener">{{ contatos.whatsapp_rotulo }}</a></span>
+      <span>✉️ Email: <a href="mailto:{{ contatos.email }}">{{ contatos.email }}</a></span>
+      <span>🔗 LinkedIn: <a href="{{ contatos.linkedin }}" target="_blank" rel="noopener">{{ contatos.linkedin_rotulo }}</a></span>
+    </div>
+  </div>
+  <figure class="topo-anexo">
+    <img src="{{ url_for('static', filename='img/anexo.png') }}"
+         alt="Qualidade, Agilidade e Simplicidade — Diploma de Graduação em Ciência de Dados (UNINASSAU) de Pedro Paulo Ribeiro">
+  </figure>
+</header>
+
+<nav class="abas" role="tablist">
+  <button class="aba ativa" role="tab" aria-selected="true" data-alvo="classico">🖥️ Computação Clássica</button>
+  <button class="aba" role="tab" aria-selected="false" data-alvo="quantico">⚛️ Computação Quântica</button>
+</nav>
+
+<main>
+{% macro painel(modo, titulo, explicacao, campos) %}
+<section class="painel {% if modo == 'classico' %}visivel{% endif %}" id="painel-{{ modo }}" role="tabpanel">
+  <div class="cartao explicacao">
+    <h2>{{ titulo }}</h2>
+    {{ explicacao|safe }}
+  </div>
+
+  <form class="cartao parametros" data-modo="{{ modo }}">
+    {% for c in campos %}
+    <label>{{ c.rotulo }}
+      <input type="number" name="{{ c.nome }}" value="{{ c.valor }}" step="{{ c.passo }}" min="{{ c.min }}" max="{{ c.max }}">
+    </label>
+    {% endfor %}
+    <button type="submit" class="btn">▶ Treinar agente</button>
+    <span class="status" aria-live="polite"></span>
+  </form>
+
+  <div class="kpis" id="kpis-{{ modo }}"></div>
+
+  <div class="grade-graficos">
+    <div class="cartao"><h3>Recompensa por episódio</h3><div class="grafico" id="g-recompensa-{{ modo }}"></div></div>
+    <div class="cartao"><h3>Passos por episódio</h3><div class="grafico" id="g-passos-{{ modo }}"></div></div>
+    <div class="cartao"><h3 id="t-exploracao-{{ modo }}">Exploração</h3><div class="grafico" id="g-exploracao-{{ modo }}"></div></div>
+  </div>
+
+  <div class="grade-mundo">
+    <div class="cartao">
+      <h3>Política aprendida e caminho guloso</h3>
+      <p class="nota">Cor = valor do estado V(s) (mais escuro = mais valioso). Seta = melhor ação. Borda = trajeto final. Clique em uma célula para detalhes.</p>
+      <div class="mundo" id="mundo-{{ modo }}"></div>
+      <div class="legenda-mundo">
+        <span><i class="sw inicio"></i>Início</span><span><i class="sw objetivo"></i>Objetivo</span>
+        <span><i class="sw armadilha"></i>Armadilha</span><span><i class="sw parede"></i>Parede</span>
+      </div>
+    </div>
+    <div class="cartao">
+      <h3 id="t-detalhe-{{ modo }}">Detalhe da célula</h3>
+      <div id="detalhe-{{ modo }}" class="detalhe"><p class="nota">Treine o agente e clique em uma célula.</p></div>
+      <h3 class="mt">{% if modo == 'classico' %}Tabela Q (estado × ação){% else %}Probabilidades de medição |c<sub>a</sub>|²{% endif %}</h3>
+      <div class="tabela-rolagem"><table class="tabela" id="tabela-{{ modo }}"></table></div>
+    </div>
+  </div>
+  {{ caller() if caller }}
+</section>
+{% endmacro %}
+
+{% call painel('classico', 'Q-Learning clássico (tabular)',
+  '<p>O agente mantém uma <strong>tabela Q(s,a)</strong> com a qualidade esperada de cada ação em cada estado. A cada passo ele atualiza:</p>
+   <p class="formula">Q(s,a) ← Q(s,a) + α · [ r + γ · max<sub>a′</sub> Q(s′,a′) − Q(s,a) ]</p>
+   <p>A exploração é <strong>ε-greedy</strong>: com probabilidade ε escolhe uma ação aleatória; senão, a de maior Q. O ε decai a cada episódio.</p>',
+  [ {'rotulo':'Episódios','nome':'episodios','valor':400,'passo':10,'min':10,'max':3000},
+    {'rotulo':'α (aprendizado)','nome':'alpha','valor':0.1,'passo':0.01,'min':0.001,'max':1},
+    {'rotulo':'γ (desconto)','nome':'gamma','valor':0.95,'passo':0.01,'min':0,'max':0.999},
+    {'rotulo':'ε inicial','nome':'epsilon','valor':1.0,'passo':0.05,'min':0,'max':1},
+    {'rotulo':'Decaimento ε','nome':'decaimento','valor':0.99,'passo':0.001,'min':0.9,'max':1},
+    {'rotulo':'Semente','nome':'semente','valor':42,'passo':1,'min':0,'max':1000000} ]) %}{% endcall %}
+
+{% call painel('quantico', 'Aprendizado por Reforço Quântico (QRL)',
+  '<p>Cada estado guarda um <strong>registrador de 2 qubits</strong> em superposição das 4 ações: |ψ⟩ = c₀|00⟩ + c₁|01⟩ + c₂|10⟩ + c₃|11⟩ (↑ → ↓ ←). Inicialmente H⊗H deixa todas com 25%.</p>
+   <p><strong>Escolher</strong> = medir o registrador (a ação sai com probabilidade |c<sub>a</sub>|²) — a exploração é intrínseca, sem ε.
+      <strong>Aprender</strong> = amplificação de amplitude de Grover: o estado gira em direção à ação tomada por um ângulo proporcional ao erro TD:</p>
+   <p class="formula">δ = r + γ·V(s′) − V(s) &nbsp;&nbsp;→&nbsp;&nbsp; Δθ = k · δ</p>
+   <p class="nota">Simulação fiel de vetor de estado em NumPy (Dong et al., <em>Quantum Reinforcement Learning</em>, IEEE, 2008).</p>',
+  [ {'rotulo':'Episódios','nome':'episodios','valor':400,'passo':10,'min':10,'max':3000},
+    {'rotulo':'α (TD de V)','nome':'alpha','valor':0.1,'passo':0.01,'min':0.001,'max':1},
+    {'rotulo':'γ (desconto)','nome':'gamma','valor':0.95,'passo':0.01,'min':0,'max':0.999},
+    {'rotulo':'k (força de Grover)','nome':'k','valor':0.05,'passo':0.01,'min':0.001,'max':1},
+    {'rotulo':'Semente','nome':'semente','valor':42,'passo':1,'min':0,'max':1000000} ]) %}
+  <div class="cartao">
+    <h3>Laboratório: algoritmo de Grover com 2 qubits</h3>
+    <p class="nota">É a operação que o agente usa para reforçar ações. Escolha a ação marcada pelo oráculo e veja as amplitudes em cada etapa do circuito — com 4 estados, uma única iteração leva a probabilidade da ação marcada a 100%.</p>
+    <div class="circuito" aria-hidden="true">
+      <span class="q">q₀ |0⟩ ─</span><b>H</b><span>─</span><b class="or">Oráculo</b><span>─</span><b class="df">Difusão</b><span>─ 📏</span><br>
+      <span class="q">q₁ |0⟩ ─</span><b>H</b><span>─</span><b class="or">U<sub>a</sub></b><span>─</span><b class="df">U<sub>s</sub></b><span>─ 📏</span>
+    </div>
+    <label class="inline">Ação marcada:
+      <select id="grover-marcado">
+        <option value="0">|00⟩ ↑</option><option value="1">|01⟩ →</option>
+        <option value="2" selected>|10⟩ ↓</option><option value="3">|11⟩ ←</option>
+      </select>
+    </label>
+    <div class="etapas-grover" id="grover-etapas"></div>
+  </div>
+{% endcall %}
+</main>
+
+<footer class="rodape">
+  © Pedro Paulo Ribeiro · <a href="{{ contatos.site }}" target="_blank" rel="noopener">www.inforpop.com</a> · Python · Flask · NumPy · Heroku
+</footer>
+
+<div class="tooltip" id="tooltip" role="status"></div>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
